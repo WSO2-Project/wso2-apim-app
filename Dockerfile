@@ -1,0 +1,1 @@
+FROM wso2/wso2am:4.7.0
