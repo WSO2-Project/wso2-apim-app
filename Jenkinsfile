@@ -37,9 +37,7 @@ pipeline {
                 script {
                     runCheckedStep('rc-tag', 'Compute & create RC tag') {
                         // Validate version from branch
-                        def m = env.BRANCH_NAME =~ releaseBranchPattern
-                        if (!m) { error("Branch name doesn't match release/X.Y.Z: ${env.BRANCH_NAME}") }
-                        env.RELEASE_VERSION = m[0][1]
+                        env.RELEASE_VERSION = env.BRANCH_NAME.replaceFirst('^release/', '')
 
                         // Compute RC tag
                         withCredentials([gitUsernamePassword(credentialsId: env.GITHUB_APP)]) {
@@ -67,7 +65,6 @@ pipeline {
                         env.IMAGE_TAG = env.RC_TAG
                     }
                 }
-    
             }
         }
 
