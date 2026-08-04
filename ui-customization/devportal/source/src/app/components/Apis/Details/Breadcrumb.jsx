@@ -1,0 +1,191 @@
+/*
+ * Copyright (c) 2021, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ *
+ * WSO2 Inc. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+import React, { useEffect, useState, useContext } from 'react';
+import { styled } from '@mui/material/styles';
+import { useHistory, Link } from 'react-router-dom';
+import Breadcrumbs from '@mui/material/Breadcrumbs';
+import Typography from '@mui/material/Typography';
+import { Link as MUILink } from '@mui/material';
+import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+import Box from '@mui/material/Box';
+import VerticalDivider from 'AppComponents/Shared/VerticalDivider';
+import { ApiContext } from 'AppComponents/Apis/Details/ApiContext';
+import { FormattedMessage, useIntl } from 'react-intl';
+import { getBasePath } from 'AppUtils/utils';
+
+const PREFIX = 'Breadcrumb';
+
+const classes = {
+    root: `${PREFIX}-root`,
+};
+
+const Root = styled('div')((
+    {
+        theme,
+    },
+) => ({
+    [`&.${classes.root}`]: {
+        paddingTop: theme.spacing(),
+        paddingBottom: theme.spacing(),
+        paddingLeft: theme.spacing(3),
+        background: theme.custom.infoBar.background || '#ffffff',
+        color: theme.palette.getContrastText(theme.custom.infoBar.background || '#ffffff'),
+        borderBottom: 'solid 1px ' + theme.palette.grey.A200,
+        '& > * + *': {
+            marginTop: theme.spacing(2),
+        },
+    },
+}));
+
+/**
+ * @returns {JSX} breadcrumb
+ */
+export default function Breadcrumb(props) {
+    const { api } = useContext(ApiContext);
+    const { breadcrumbDocument } = props;
+
+    const history = useHistory();
+    const intl = useIntl();
+    const pages = [
+        {
+            route: 'overview',
+            text: intl.formatMessage({
+                defaultMessage: 'Overview',
+                id: 'Apis.Details.Breadcrumb.overview',
+            }),
+        },
+        {
+            route: 'credentials',
+            text: intl.formatMessage({
+                defaultMessage: 'Subscriptions',
+                id: 'Apis.Details.Breadcrumb.subscriptions',
+            }),
+        },
+        {
+            route: 'api-console',
+            text: intl.formatMessage({
+                defaultMessage: 'API Console',
+                id: 'Apis.Details.Breadcrumb.try.out.api-console',
+            }),
+        },
+        {
+            route: 'api-chat',
+            text: intl.formatMessage({
+                defaultMessage: 'API Chat',
+                id: 'Apis.Details.Breadcrumb.try.out.api-chat',
+            }),
+        },
+        {
+            route: 'comments',
+            text: intl.formatMessage({
+                defaultMessage: 'Comments',
+                id: 'Apis.Details.Breadcrumb.comments',
+            }),
+        },
+        {
+            route: 'documents',
+            text: intl.formatMessage({
+                defaultMessage: 'Documents',
+                id: 'Apis.Details.Breadcrumb.documents',
+            }),
+        },
+        {
+            route: 'sdk',
+            text: intl.formatMessage({
+                defaultMessage: 'SDKs',
+                id: 'Apis.Details.Breadcrumb.sdks',
+            }),
+        },
+        {
+            route: 'mcp-playground',
+            text: intl.formatMessage({
+                defaultMessage: 'MCP Playground',
+                id: 'Apis.Details.Breadcrumb.mcp.playground',
+            }),
+        },
+    ];
+
+    const [selected, setSelected] = useState(pages[0]);
+    const basePath = getBasePath(api.type);
+
+    const detectCurrentMenu = (location = null) => {
+        let locationLocal = location;
+        if (!locationLocal) {
+            locationLocal = window.location;
+        }
+        const { pathname } = locationLocal;
+        for (let i = 0; i < pages.length; i++) {
+            const test1 = new RegExp('/' + pages[i].route + '$', 'g');
+            const test2 = new RegExp('/' + pages[i].route + '/', 'g');
+            if (pathname.match(test1) || pathname.match(test2)) {
+                setSelected(pages[i]);
+            }
+        }
+    };
+    useEffect(() => {
+        detectCurrentMenu();
+    }, []);
+    history.listen((location) => {
+        detectCurrentMenu(location);
+    });
+    useEffect(() => {
+        detectCurrentMenu();
+    }, [breadcrumbDocument]);
+    return (
+        <Root className={classes.root}>
+            <Box display='flex' flexDirection='row' alignItems='center'>
+                <Typography color='textPrimary' component='h1' variant='h6'>{selected.text}</Typography>
+                <VerticalDivider height={15} />
+                <Breadcrumbs separator={<NavigateNextIcon fontSize='small' />} aria-label='breadcrumb'>
+                    <MUILink
+                        color='textPrimary'
+                        to={basePath + api.id + '/overview'}
+                        component={Link}
+                        underline='hover'
+                    >
+                        {api.displayName || api.name}
+                    </MUILink>
+                    {(selected.route === 'api-console' || selected.route === 'api-chat') && (
+                        <Typography color='textPrimary'>
+                            <FormattedMessage
+                                id='Apis.Details.Breadcrumb.route.try.out'
+                                defaultMessage='Try Out'
+                            />
+                        </Typography>
+                    )}
+                    { (selected.route === 'documents' && document) && (
+                        <MUILink
+                            color='textPrimary'
+                            to={basePath + api.id + '/documents/default'}
+                            component={Link}
+                            underline='hover'
+                        >
+                            {selected.text}
+                        </MUILink>
+                    ) }
+                    { (selected.route === 'documents' && !document) && <Typography color='textPrimary'>{selected.text}</Typography> }
+                    { (selected.route === 'documents' && document) && (
+                        <Typography color='textPrimary' data-testid='breadcrumbDocument'>{breadcrumbDocument}</Typography>
+                    )}
+                    { (selected.route !== 'documents') && <Typography color='textPrimary'>{selected.text}</Typography> }
+                </Breadcrumbs>
+            </Box>
+
+        </Root>
+    );
+}

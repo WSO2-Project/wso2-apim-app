@@ -1,0 +1,223 @@
+<%--
+  ~ Copyright (c) 2017-2023, WSO2 LLC (https://www.wso2.com).
+  ~
+  ~ WSO2 LLC licenses this file to you under the Apache License,
+  ~ Version 2.0 (the "License"); you may not use this file except
+  ~ in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~    http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing,
+  ~ software distributed under the License is distributed on an
+  ~ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  ~ KIND, either express or implied.  See the License for the
+  ~ specific language governing permissions and limitations
+  ~ under the License.
+--%>
+
+<%@page import="java.net.URLEncoder"%>
+<%@page import="java.util.regex.Pattern"%>
+<%@page import="java.util.List"%>
+<%@page import="java.util.ArrayList"%>
+<%@page import="java.util.Arrays"%>
+<%@page import="org.apache.commons.logging.LogFactory"%>
+<%@page import="org.apache.commons.logging.Log"%>
+<%@page import="java.util.HashMap"%>
+<%@page import="java.util.concurrent.Semaphore"%>
+<%@page import="org.wso2.carbon.apimgt.impl.dto.SystemApplicationDTO"%>
+<%@page import="org.wso2.carbon.apimgt.impl.dao.SystemApplicationDAO"%>
+<%@page import="com.google.gson.Gson"%>
+<%@page import="com.google.gson.GsonBuilder"%>
+<%@page import="java.net.URI"%>
+<%@page import="java.net.http.HttpResponse"%>
+<%@page import="java.net.http.HttpRequest"%>
+<%@page import="java.net.http.HttpClient"%>
+<%@page import="org.wso2.carbon.apimgt.impl.IDPConfiguration"%>
+<%@page import="org.wso2.carbon.apimgt.impl.utils.APIUtil"%>
+<%@page import="org.wso2.carbon.apimgt.ui.devportal.Util"%>
+<%@page import="java.util.Map"%>
+
+<%@include file="../constants.jsp" %>
+
+<%@page trimDirectiveWhitespaces="true" %>
+
+<%    
+    Log log = LogFactory.getLog(this.getClass());
+    log.debug("Services login DCR request");
+    Map settings = Util.readJsonFile("site/public/theme/settings.json", request.getServletContext());
+    String context = Util.getTenantBaseStoreContext(request, (String) Util.readJsonObj(settings, "app.context"));
+    String appContext = Util.getAppContextForServerUrl(context, (String) Util.readJsonObj(settings, "app.proxy_context_path"));
+    String serverUrl = APIUtil.getServerURL();
+    String forwarded_for = request.getHeader((String) Util.readJsonObj(settings, "app.customUrl.forwardedHeader"));
+    boolean customUrlEnabled = (boolean) Util.readJsonObj(settings, "app.customUrl.enabled");
+    // Host validation against app.customUrl.allowedHosts
+    boolean isHostValid = true;
+    if (customUrlEnabled && forwarded_for != null && !forwarded_for.isEmpty()) {
+        // Check if allowedHosts is configured
+        List<String> allowedHosts = (List<String>) Util.readJsonObj(settings, "app.customUrl.allowedHosts");
+
+        if (allowedHosts != null && !allowedHosts.isEmpty()) {
+            // Extract hostname from forwarded_for (remove port if present)
+            String forwardedHost = forwarded_for;
+            if (forwardedHost.contains(":")) {
+                forwardedHost = forwardedHost.substring(0, forwardedHost.indexOf(":"));
+            }
+
+            isHostValid = false;
+            for (String allowedHost : allowedHosts) {
+                if (allowedHost != null && allowedHost.equalsIgnoreCase(forwardedHost)) {
+                    isHostValid = true;
+                    break;
+                }
+            }
+
+            if (!isHostValid) {
+                log.warn("Blocked request with untrusted host header: " + forwarded_for.replaceAll("[\r\n]", ""));
+                response.setStatus(400);
+                response.setContentType("text/html");
+                out.println("<html><head></head><body><h2>Error 400 : Bad Request</h2><br/><p>"+
+                    "<h4>Host validation failed for the request</h4></body></html>");
+                return;
+            }
+        }
+    }
+
+    // Only use custom URL if host validation passes
+    if (customUrlEnabled && forwarded_for != null && !forwarded_for.isEmpty() && isHostValid) {
+        serverUrl = MGT_TRANSPORT + forwarded_for;
+    } else {
+        serverUrl = Util.getTenantBasedCustomUrl(request);
+        if (serverUrl == null) {
+            serverUrl = APIUtil.getServerURL();
+        }
+    }
+    String authorizeEndpoint = serverUrl + AUTHORIZE_ENDPOINT_SUFFIX;
+
+    IDPConfiguration idpConfig = APIUtil.getIdentityProviderConfig();
+    if (idpConfig != null) {
+        authorizeEndpoint = idpConfig.getAuthorizeEndpoint();
+    }
+    String host = (String) Util.readJsonObj(settings, "app.origin.host");
+    String settingsAPIUrl = Util.getLoopbackOrigin(host) + SETTINGS_REST_API_URL_SUFFIX;
+
+    HttpClient client = HttpClient.newHttpClient();
+    HttpRequest getReq = HttpRequest.newBuilder()
+            .uri(URI.create(settingsAPIUrl))
+            .build();
+    HttpResponse<String> settingsResult = client.send(getReq, HttpResponse.BodyHandlers.ofString());
+
+    Gson gson = new GsonBuilder().setPrettyPrinting().create();
+    Map settingsResponse = gson.fromJson(settingsResult.body(), Map.class);
+    String dcrUrl = Util.getLoopbackOrigin(host) + DCR_URL_SUFFIX;
+    String loginCallbackUrl = Util.getTenantBasedLoginCallBack(request, LOGIN_CALLBACK_URL_SUFFIX);
+    if (loginCallbackUrl == null) {
+        loginCallbackUrl = serverUrl + appContext + LOGIN_CALLBACK_URL_SUFFIX;
+    }
+    String logoutCallbackUrl = Util.getTenantBasedLogoutCallBack(request, LOGOUT_CALLBACK_URL_SUFFIX);
+    if (logoutCallbackUrl == null) {
+        logoutCallbackUrl = serverUrl + appContext + LOGOUT_CALLBACK_URL_SUFFIX;
+    }
+    String callbackUrl = "regexp=(" + loginCallbackUrl + "|" + logoutCallbackUrl + ")";
+    List<String> scopesArray = (ArrayList<String>) Util.readJsonObj(settingsResponse, "scopes");
+    String[] scopesList = scopesArray.toArray(new String[0]);
+    String scopes = String.join(" ", scopesList);
+    String referer = request.getHeader("Referer");
+    String state = "";
+    // get the pathname excluding the 'devportal/publisher' segment
+    if (referer != null) {
+        String contextRef = !appContext.isEmpty() && appContext.charAt(0) == '/' ? appContext.substring(1) : appContext;
+        String hostnamePattern = "(https?:\\/\\/.*):?(\\d*)\\/?(" + contextRef + ")";
+        Pattern regPattern = Pattern.compile(hostnamePattern);
+        String replaced = regPattern.matcher(referer).replaceAll("");
+        state = URLEncoder.encode(replaced, "UTF-8");
+    }
+
+    String authorizationHeader = "Basic " + APIUtil.getBase64EncodedAdminCredentials();
+
+    SystemApplicationDAO systemApplicationDAO = new SystemApplicationDAO();
+    String clientId = "";
+    String serviceProviderTenantDomain = Util.getServiceProviderTenantDomain(request);
+
+    // this is to support migration from admin_store to admin_devportal
+    SystemApplicationDTO systemApplicationDTO = systemApplicationDAO.getClientCredentialsForApplication(STORE_CLIENT_APP_NAME, serviceProviderTenantDomain);
+    if (systemApplicationDTO == null) {
+        systemApplicationDTO = systemApplicationDAO.getClientCredentialsForApplication(STORE_CLIENT_APP_NAME_OLD, serviceProviderTenantDomain);
+    }
+
+    Semaphore lock = SystemApplicationDAO.getLock();
+    if (systemApplicationDTO != null) {
+        clientId = systemApplicationDTO.getConsumerKey();
+        log.debug("clientid :" + clientId);
+    } else {
+        try {
+            lock.acquire();
+            // this is to support migration from admin_store to admin_devportal
+            systemApplicationDTO = systemApplicationDAO.getClientCredentialsForApplication(STORE_CLIENT_APP_NAME, serviceProviderTenantDomain);
+            if (systemApplicationDTO == null) {
+                systemApplicationDTO = systemApplicationDAO.getClientCredentialsForApplication(STORE_CLIENT_APP_NAME_OLD, serviceProviderTenantDomain);
+            }
+            if (systemApplicationDTO == null) {
+                HashMap<String, Object> dcrRequestData = new HashMap();
+                dcrRequestData.put("callbackUrl", callbackUrl);
+                dcrRequestData.put("clientName", STORE_CLIENT_APP_NAME);
+                dcrRequestData.put("owner", (String) APIUtil.getTenantAdminUserName(serviceProviderTenantDomain));
+                dcrRequestData.put("grantType", "authorization_code refresh_token");
+                dcrRequestData.put("saasApp", true);
+
+                Object isJWTEnabledObj = Util.readJsonObj(settingsResponse, "IsJWTEnabledForLoginTokens");
+                if (isJWTEnabledObj != null && isJWTEnabledObj instanceof Boolean) {
+                    boolean isJWTEnabledForLoginTokens = (boolean) isJWTEnabledObj;
+                    if (isJWTEnabledForLoginTokens) {
+                        dcrRequestData.put("tokenType", "JWT");
+                        dcrRequestData.put("userStoreDomainInSubject", true);
+                    }
+                }
+
+                log.debug(dcrRequestData);
+                HttpRequest postReq = HttpRequest.newBuilder()
+                        .uri(URI.create(dcrUrl))
+                        .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(dcrRequestData)))
+                        .header("Authorization", authorizationHeader)
+                        .header("Content-Type", "application/json")
+                        .build();
+                HttpResponse<String> dcrResult = client.send(postReq, HttpResponse.BodyHandlers.ofString());
+                Map dcrResponse = gson.fromJson(dcrResult.body(), Map.class);
+                clientId = (String) dcrResponse.get("clientId");
+                String clientSecret = (String) dcrResponse.get("clientSecret");
+
+                log.debug("Client ID = " + clientId);
+                boolean addApplicationKey = systemApplicationDAO.addApplicationKey(STORE_CLIENT_APP_NAME, clientId, clientSecret, serviceProviderTenantDomain);
+                if (!addApplicationKey) {
+                    log.error("Error while persisting application information in system application DB table!!");
+                    log.error("Client ID = " + clientId);
+                }
+            }
+        } finally {
+            lock.release();
+        }
+    }
+
+    boolean isPKCEEnabled = systemApplicationDAO.isPKCEEnabled(clientId);
+    String pkceParams = "";
+    if (isPKCEEnabled) {
+       String codeVerifier = APIUtil.generateCodeVerifier();
+       session.setAttribute("code_verifier", codeVerifier);
+       String codeChallenge = APIUtil.generateCodeChallenge(codeVerifier);
+       pkceParams = "&code_challenge=" + codeChallenge + "&code_challenge_method=S256";
+    }
+
+    String authRequestParams = "?response_type=code&client_id=" + clientId + "&scope=" + scopes + "&state=" + state + "&redirect_uri=" + loginCallbackUrl
+         + pkceParams;
+    String loginPrompt = request.getParameter("loginPrompt");
+    if (loginPrompt != null && loginPrompt.equals("false")) {
+        authRequestParams += "&prompt=none";
+    }
+    log.debug("Redirecting to = " + authorizeEndpoint + authRequestParams);
+    Cookie cookie = new Cookie("CLIENT_ID", clientId);
+    cookie.setPath(appContext + "/");
+    cookie.setSecure(true);
+    cookie.setMaxAge(-1);
+    response.addCookie(cookie);
+    response.sendRedirect(authorizeEndpoint + authRequestParams);
+%>

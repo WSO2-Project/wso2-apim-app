@@ -1,0 +1,2 @@
+"use strict";(this.webpackChunk_wso2apim_devportal=this.webpackChunk_wso2apim_devportal||[]).push([[395],{35625(e,t,r){r.r(t),r.d(t,{default:()=>l});var a=r(296540),c=r(956347),n=r(126150),s=r(482810),p=r(565323);const l=()=>a.createElement(c.dO,null,a.createElement(c.qh,{exact:!0,path:"/mcp-servers",render:e=>a.createElement(n.A,e)}),a.createElement(c.qh,{path:"/mcp-servers/:serverUuid/",render:e=>a.createElement(s.A,e)}),a.createElement(c.qh,{component:p.MI}))}}]);
+//# sourceMappingURL=MCPServers.99756b8c9a9980d67081.bundle.js.map

@@ -1,0 +1,33 @@
+{
+  "app": {
+    "context": "/admin",
+    "customUrl": {
+      "enabled": false,
+      "forwardedHeader": "X-Forwarded-For"
+    },
+    "origin": {
+      "host": "localhost"
+    },
+    "workflows": {
+      "limit": 30
+    },
+    "feedback": {
+      "enable": false,
+      "serviceURL": ""
+    },
+    "singleLogout": {
+      "enabled": true,
+      "timeout": 2000
+    },
+    "logoutSessionStateAppender" : "" ,
+    "docUrl": "https://apim.docs.wso2.com/en/4.7.0/",
+    "platformGateway": {
+      "releasesUrl": "https://github.com/wso2/api-platform/releases"
+    },
+    "sessionTimeout": {
+      "enable": true,
+      "idleWarningTimeout": 1740,
+      "idleTimeout": 1800
+    }
+  }
+}

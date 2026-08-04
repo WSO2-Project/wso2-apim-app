@@ -1,0 +1,740 @@
+/*
+ * Copyright (c) 2019, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ *
+ * WSO2 Inc. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+import React from 'react';
+import { styled } from '@mui/material/styles';
+import PropTypes from 'prop-types';
+import { Link as RouterLink } from 'react-router-dom';
+import { Typography } from '@mui/material';
+import Button from '@mui/material/Button';
+import Subscription from 'AppData/Subscription';
+import GenericDisplayDialog from 'AppComponents/Shared/GenericDisplayDialog';
+import CircularProgress from '@mui/material/CircularProgress';
+import Api from 'AppData/api';
+import Alert from 'AppComponents/Shared/Alert';
+import Paper from '@mui/material/Paper';
+import Grid from '@mui/material/Grid';
+import Icon from '@mui/material/Icon';
+import Link from '@mui/material/Link';
+import InlineMessage from 'AppComponents/Shared/InlineMessage';
+import { FormattedMessage, injectIntl } from 'react-intl';
+import Application from 'AppData/Application';
+import AuthManager from 'AppData/AuthManager';
+import SubscribeToApi from 'AppComponents/Shared/AppsAndKeys/SubscribeToApi';
+import { ScopeValidation, resourceMethods, resourcePaths } from 'AppComponents/Shared/ScopeValidation';
+import { getTypeToDisplay, getBasePath } from 'AppUtils/utils';
+import OriginalDevportalDetails from './OriginalDevportalDetails';
+import { ApiContext } from '../ApiContext';
+import SubscriptionTableRow from './SubscriptionTableRow';
+
+const PREFIX = 'Credentials';
+
+const classes = {
+    contentWrapper: `${PREFIX}-contentWrapper`,
+    titleSub: `${PREFIX}-titleSub`,
+    generateCredentialWrapper: `${PREFIX}-generateCredentialWrapper`,
+    tableMain: `${PREFIX}-tableMain`,
+    expansion: `${PREFIX}-expansion`,
+    summary: `${PREFIX}-summary`,
+    subscribeRoot: `${PREFIX}-subscribeRoot`,
+    activeLink: `${PREFIX}-activeLink`,
+    appBar: `${PREFIX}-appBar`,
+    toolbar: `${PREFIX}-toolbar`,
+    subscribeTitle: `${PREFIX}-subscribeTitle`,
+    paper: `${PREFIX}-paper`,
+    descWrapper: `${PREFIX}-descWrapper`,
+    credentialBoxWrapper: `${PREFIX}-credentialBoxWrapper`,
+    credentialBox: `${PREFIX}-credentialBox`,
+    addLinkWrapper: `${PREFIX}-addLinkWrapper`,
+    subsListTitle: `${PREFIX}-subsListTitle`,
+    subsListDesc: `${PREFIX}-subsListDesc`,
+    buttonElm: `${PREFIX}-buttonElm`,
+    launchIcon: `${PREFIX}-launchIcon`,
+    originalDevPortalLink: `${PREFIX}-originalDevPortalLink`,
+};
+
+const StyledGrid = styled(Grid)((
+    {
+        theme,
+    },
+) => ({
+    [`& .${classes.contentWrapper}`]: {
+        maxWidth: theme.custom.contentAreaWidth,
+        paddingLeft: theme.spacing(3),
+        paddingTop: theme.spacing(3),
+    },
+
+    [`& .${classes.titleSub}`]: {
+        marginLeft: theme.spacing(3),
+        paddingTop: theme.spacing(2),
+        paddingBottom: theme.spacing(2),
+        color: theme.palette.getContrastText(theme.palette.background.default),
+    },
+
+    [`& .${classes.generateCredentialWrapper}`]: {
+        marginLeft: 0,
+        paddingTop: theme.spacing(2),
+        paddingBottom: theme.spacing(2),
+        '& span, & h5, & label, & td, & li, & div': {
+            color: theme.palette.getContrastText(theme.palette.background.paper),
+        },
+    },
+
+    [`& .${classes.tableMain}`]: {
+        '& > table': {
+            width: '100%',
+            borderCollapse: 'collapse',
+            marginTop: theme.spacing(3),
+            marginLeft: theme.spacing(2),
+            marginRight: theme.spacing(1),
+        },
+        '& table > tr td': {
+            paddingLeft: theme.spacing(1),
+        },
+        '&  table > tr:nth-child(even)': {
+            backgroundColor: theme.custom.listView.tableBodyEvenBackgrund,
+            '& td, & a, & .material-icons': {
+                color: theme.palette.getContrastText(theme.custom.listView.tableBodyEvenBackgrund),
+            },
+        },
+        '&  table > tr:nth-child(odd)': {
+            backgroundColor: theme.custom.listView.tableBodyOddBackgrund,
+            '& td, & a, & .material-icons': {
+                color: theme.palette.getContrastText(theme.custom.listView.tableBodyOddBackgrund),
+            },
+        },
+        '&  table > tr > th': {
+            backgroundColor: theme.custom.listView.tableHeadBackground,
+            color: theme.palette.getContrastText(theme.custom.listView.tableHeadBackground),
+            paddingLeft: theme.spacing(1),
+            borderBottom: 'solid 1px ' + theme.palette.grey.A400,
+            borderTop: 'solid 1px ' + theme.palette.grey.A400,
+            textAlign: 'left',
+            fontSize: '11px',
+            paddingTop: theme.spacing(1),
+            paddingBottom: theme.spacing(1),
+        },
+        '& table > tr > th:last-child': {
+            textAlign: 'right',
+        },
+
+    },
+
+    [`& .${classes.expansion}`]: {
+        background: 'transparent',
+        boxShadow: 'none',
+    },
+
+    [`& .${classes.summary}`]: {
+        alignItems: 'center',
+    },
+
+    [`& .${classes.subscribeRoot}`]: {
+        paddingLeft: theme.spacing(2),
+    },
+
+    [`& .${classes.activeLink}`]: {
+        background: theme.palette.grey.A300,
+    },
+
+    [`& .${classes.appBar}`]: {
+        background: theme.palette.background.paper,
+        color: theme.palette.getContrastText(theme.palette.background.paper),
+    },
+
+    [`& .${classes.toolbar}`]: {
+        marginLeft: theme.spacing(2),
+    },
+
+    [`& .${classes.subscribeTitle}`]: {
+        flex: 1,
+    },
+
+    [`& .${classes.paper}`]: {
+        marginLeft: theme.spacing(3),
+        padding: theme.spacing(2),
+    },
+
+    [`& .${classes.descWrapper}`]: {
+        marginBottom: theme.spacing(2),
+        color: theme.palette.getContrastText(theme.palette.background.paper),
+    },
+
+    [`& .${classes.credentialBoxWrapper}`]: {
+        paddingLeft: theme.spacing(2),
+    },
+
+    [`& .${classes.credentialBox}`]: {
+        padding: theme.spacing(1),
+        border: 'solid 1px #ccc',
+        borderRadius: 5,
+        marginBottom: theme.spacing(2),
+        marginTop: theme.spacing(2),
+    },
+
+    [`& .${classes.addLinkWrapper}`]: {
+        marginLeft: theme.spacing(2),
+    },
+
+    [`& .${classes.subsListTitle}`]: {
+        color: theme.palette.getContrastText(theme.palette.background.paper),
+    },
+
+    [`& .${classes.subsListDesc}`]: {
+        color: theme.palette.getContrastText(theme.palette.background.paper),
+    },
+
+    [`& .${classes.buttonElm}`]: {
+        '& span': {
+            color: theme.palette.getContrastText(theme.palette.primary.main),
+        },
+    },
+
+    [`& .${classes.launchIcon}`]: {
+        paddingLeft: theme.spacing(1),
+    },
+
+    [`& .${classes.originalDevPortalLink}`]: {
+        marginTop: theme.spacing(2),
+    },
+}));
+
+/**
+ * @class Credentials
+ * @extends {React.Component}
+ */
+class Credentials extends React.Component {
+    /**
+     *Creates an instance of Credentials.
+     * @param JSON props
+     * @memberof Credentials
+     */
+    constructor(props) {
+        super(props);
+        this.state = {
+            expanded: true,
+            selectedAppId: false,
+            selectedKeyType: false,
+            subscriptionRequest: {
+                applicationId: '',
+                apiId: '',
+                throttlingPolicy: '',
+            },
+            throttlingPolicyList: [],
+            applicationOwner: '',
+            hashEnabled: false,
+            isSubscribing: false,
+        };
+        this.api = new Api();
+    }
+
+    /**
+     *  Set the initial values for subscription request
+     */
+    componentDidMount() {
+        const { api, updateSubscriptionData } = this.context;
+        if (api) {
+            this.updateData();
+        } else {
+            updateSubscriptionData(this.updateData);
+        }
+    }
+
+    updateData = () => {
+        const { api, applicationsAvailable } = this.context;
+        const { subscriptionRequest } = this.state;
+        const newSubscriptionRequest = { ...subscriptionRequest, apiId: api.id };
+        const throttlingPolicyList = api.tiers.sort((a, b) => {
+            // Sort by 'COMMERCIAL' tier plan first
+            if (a.tierPlan === 'COMMERCIAL' && b.tierPlan !== 'COMMERCIAL') {
+                return -1;
+            } else if (a.tierPlan !== 'COMMERCIAL' && b.tierPlan === 'COMMERCIAL') {
+                return 1;
+            }
+            // For options within the same tier plan, sort alphabetically
+            return a.tierName.localeCompare(b.tierName);
+        });
+        if (throttlingPolicyList && throttlingPolicyList[0]) {
+            newSubscriptionRequest.throttlingPolicy = throttlingPolicyList[0].tierName;
+        }
+        if (applicationsAvailable && applicationsAvailable[0]) {
+            newSubscriptionRequest.applicationId = applicationsAvailable[0].value;
+        }
+        this.setState({ subscriptionRequest: newSubscriptionRequest, throttlingPolicyList });
+    };
+
+    /**
+     * @memberof Credentials
+     */
+    handleExpandClick = () => {
+        this.setState((state) => ({ expanded: !state.expanded }));
+    };
+
+    /**
+     * @param {*} updateSubscriptionData method to update global subscription data
+     * @memberof Credentials
+     */
+    handleSubscribe = () => {
+        const { updateSubscriptionData, apiType } = this.context;
+        const { subscriptionRequest } = this.state;
+        const { intl } = this.props;
+        const api = new Api();
+        this.setState({ isSubscribing: true });
+        api.subscribe(
+            subscriptionRequest.apiId,
+            subscriptionRequest.applicationId,
+            subscriptionRequest.throttlingPolicy,
+            apiType,
+        )
+            .then((response) => {
+                if (response.body.status === 'ON_HOLD') {
+                    Alert.info(intl.formatMessage({
+                        defaultMessage: 'Your subscription request has been submitted and is now awaiting approval.',
+                        id: 'subscription.pending',
+                    }));
+                } else {
+                    console.log('Subscription created successfully with ID : ' + response.body.subscriptionId);
+                    Alert.info(intl.formatMessage({
+                        defaultMessage: 'Subscribed successfully',
+                        id: 'Apis.Details.Credentials.Credentials.subscribed.successfully',
+                    }));
+                }
+                if (updateSubscriptionData) updateSubscriptionData(this.updateData);
+                this.setState({ isSubscribing: false });
+            })
+            .catch((error) => {
+                Alert.error(intl.formatMessage({
+                    id: 'Applications.Details.Subscriptions.error.occurred.during.subscription.not.201',
+                    defaultMessage: 'Error occurred during subscription',
+                }));
+                console.log('Error while creating the subscription.');
+                console.error(error);
+                this.setState({ isSubscribing: false });
+            });
+    };
+
+    /**
+     * @inheritdoc
+     * @memberof Credentials
+     */
+    goToWizard = () => {
+        const { history } = this.props;
+        history.push('credentials/wizard');
+    };
+
+    /**
+     * used to load the token manager component when
+     * key type is selected in the applicaiton list
+     * @param {*} selectedKeyType key type
+     * @param {*} selectedAppId  application id
+     * @memberof Credentials
+     */
+    loadInfo = (selectedKeyType, selectedAppId) => {
+        this.setState({ selectedKeyType, selectedAppId });
+
+        Application.get(selectedAppId)
+            .then((result) => {
+                this.setState({ applicationOwner: result.owner, hashEnabled: result.hashEnabled });
+            });
+    };
+
+    /**
+     * used to check if key manager is in the allowed list for an API
+     * @param {*} name name of the key manager
+     * @memberof Credentials
+     */
+    isKeyManagerAllowed = (name) => {
+        const { api } = this.context;
+        return api && ((api.keyManagers && api.keyManagers.includes('all'))
+        || (api.keyManagers && api.keyManagers.includes(name)));
+    };
+
+    /**
+     * Update subscription Request state
+     * @param {Object} subscriptionRequest parameters requried for subscription
+     */
+    updateSubscriptionRequest = (subscriptionRequest) => {
+        this.setState({ subscriptionRequest });
+    };
+
+    /**
+     *
+     * @param {*} subscriptionId subscription id
+     * @param {*} updateSubscriptionData method to update global subscription data
+     * @memberof Subscriptions
+     */
+    handleSubscriptionDelete = (subscriptionId, updateSubscriptionData) => {
+        const { intl } = this.props;
+        const client = new Subscription();
+        const promisedDelete = client.deleteSubscription(subscriptionId);
+        promisedDelete.then((response) => {
+            if (response.status === 200) {
+                Alert.info(intl.formatMessage({
+                    defaultMessage: 'Subscription deleted successfully!',
+                    id: 'Apis.Details.Credentials.Credentials.subscription.deleted.successfully',
+                }));
+            }
+            if (response.status === 201) {
+                Alert.info(intl.formatMessage({
+                    defaultMessage: 'Subscription Deletion Request Created!',
+                    id: 'Apis.Details.Credentials.Credentials.subscription.request.created',
+                }));
+            }
+            if (response.status !== 200 && response.status !== 201) {
+                console.log(response);
+                Alert.info(intl.formatMessage({
+                    defaultMessage: 'Something went wrong while deleting the Subscription!',
+                    id: 'Apis.Details.Credentials.Credentials.something.went.wrong.with.subscription',
+                }));
+                return;
+            }
+            if (updateSubscriptionData) updateSubscriptionData(this.updateData);
+        });
+    };
+
+    /**
+     * @inheritdoc
+     */
+    render() {
+        const { intl } = this.props;
+        const {
+            api, updateSubscriptionData, applicationsAvailable, subscribedApplications,
+        } = this.context;
+        const {
+            selectedKeyType,
+            selectedAppId,
+            subscriptionRequest,
+            throttlingPolicyList,
+            applicationOwner,
+            hashEnabled,
+            isSubscribing,
+        } = this.state;
+        const user = AuthManager.getUser();
+        const isOnlyMutualSSL = api.securityScheme.includes('mutualssl') && !api.securityScheme.includes('oauth2')
+        && !api.securityScheme.includes('api_key') && !api.securityScheme.includes('basic_auth');
+        const isOnlyBasicAuth = api.securityScheme.includes('basic_auth') && !api.securityScheme.includes('oauth2')
+         && !api.securityScheme.includes('api_key');
+        const isSetAllorResidentKeyManagers = (api.keyManagers && api.keyManagers.includes('all'))
+            || (api.keyManagers && api.keyManagers.includes('Resident Key Manager'));
+        const renderCredentialInfo = () => {
+            if (isOnlyMutualSSL || isOnlyBasicAuth) {
+                return (
+                    <InlineMessage type='info' className={classes.dialogContainer}>
+                        <Typography component='p'>
+                            <FormattedMessage
+                                id='Apis.Details.Creadentials.credetials.mutualssl'
+                                defaultMessage={'Subscription is not required for Mutual SSL {type}s'
+                                        + ' or {type}s with only Basic Authentication.'}
+                                values={{ type: getTypeToDisplay(api.type) }}
+                            />
+                        </Typography>
+                    </InlineMessage>
+                );
+            } else if (applicationsAvailable.length === 0 && subscribedApplications.length === 0) {
+                return (
+                    <GenericDisplayDialog
+                        classes={classes}
+                        handleClick={this.goToWizard}
+                        heading={user ? intl.formatMessage({
+                            defaultMessage: 'Subscribe',
+                            id: 'Apis.Details.Credentials.Credentials.subscribe.to.application',
+                        })
+                            : intl.formatMessage({
+                                defaultMessage: 'Sign In to Subscribe',
+                                id: 'Apis.Details.Credentials.Credentials.subscribe.to.application.sign.in',
+                            })}
+                        caption={(
+                            <FormattedMessage
+                                id='Apis.Details.Credentials.Credentials.subscribe.to.application.msg'
+                                defaultMessage='You need to subscribe to an application to access this {type}'
+                                values={{ type: getTypeToDisplay(api.type) }}
+                            />
+                        )}
+                        buttonText={intl.formatMessage({
+                            defaultMessage: 'Subscribe',
+                            id: 'Apis.Details.Credentials.Credentials.generate',
+                        })}
+                    />
+                );
+            } else {
+                return (
+                    <>
+                        <div className={classes.generateCredentialWrapper}>
+                            <ScopeValidation
+                                resourcePath={resourcePaths.SUBSCRIPTIONS}
+                                resourceMethod={resourceMethods.POST}
+                            >
+                                <Typography variant='h5' component='h2'>
+                                    <FormattedMessage
+                                        id={'Apis.Details.Credentials.Credentials.'
+                                        + 'subscribe.to.application'}
+                                        defaultMessage='Subscribe'
+                                    />
+                                </Typography>
+                                <div className={classes.credentialBoxWrapper}>
+                                    {applicationsAvailable.length === 0 && (
+                                        <div className={classes.credentialBox}>
+                                            <Typography variant='body2'>
+                                                <FormattedMessage
+                                                    id={'Apis.Details.Credentials.Credentials.'
+                                                    + 'api.credentials.with.wizard.message'}
+                                                    defaultMessage={
+                                                        'Use the Subscription and Key Generation Wizard. '
+                                                        + 'Create a new application -> '
+                                                        + 'Subscribe -> Generate keys and '
+                                                        + 'Access Token to invoke this {type}.'
+                                                    }
+                                                    values={{ type: getTypeToDisplay(api.type) }}
+                                                />
+                                            </Typography>
+                                            <Button
+                                                variant='contained'
+                                                color='primary'
+                                                className={classes.buttonElm}
+                                                to={(isOnlyMutualSSL || isOnlyBasicAuth
+                                                    || !isSetAllorResidentKeyManagers) ? null
+                                                    : getBasePath(api.type) + api.id + '/credentials/wizard'}
+                                                component={RouterLink}
+                                                disabled={!api.isSubscriptionAvailable || isOnlyMutualSSL
+                                                    || isOnlyBasicAuth || !isSetAllorResidentKeyManagers}
+                                            >
+                                                <FormattedMessage
+                                                    id={'Apis.Details.Credentials.'
+                                                    + 'SubscibeButtonPanel.subscribe.wizard.with.new.app'}
+                                                    defaultMessage='Subscription & Key Generation Wizard'
+                                                />
+                                            </Button>
+                                        </div>
+                                    ) }
+                                    {applicationsAvailable.length > 0 && (
+                                        <div className={classes.credentialBox}>
+                                            <Typography variant='body2'>
+                                                <FormattedMessage
+                                                    id={'Apis.Details.Credentials.Credentials'
+                                                    + '.api.credentials.with.subscribe.message'}
+                                                    defaultMessage={'Subscribe to an application'
+                                                    + ' and generate credentials'}
+                                                />
+                                            </Typography>
+                                            <SubscribeToApi
+                                                applicationsAvailable={applicationsAvailable}
+                                                subscriptionRequest={subscriptionRequest}
+                                                throttlingPolicyList={throttlingPolicyList}
+                                                updateSubscriptionRequest={this.updateSubscriptionRequest}
+                                                renderSmall
+                                            />
+                                            <Button
+                                                variant='contained'
+                                                color='primary'
+                                                className={classes.buttonElm}
+                                                onClick={() => this.handleSubscribe()}
+                                                disabled={!api.isSubscriptionAvailable || isSubscribing}
+                                                id='subscribe-to-api-btn'
+                                            >
+                                                <FormattedMessage
+                                                    id={'Apis.Details.Credentials.'
+                                                    + 'SubscibeButtonPanel.subscribe.btn'}
+                                                    defaultMessage='Subscribe'
+                                                />
+                                                {isSubscribing && <CircularProgress size={24} />}
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            </ScopeValidation>
+                        </div>
+                        {/*
+                                    ****************************
+                                    Subscription List
+                                    ***************************
+                                    */}
+                        {subscribedApplications && subscribedApplications.length > 0 && (
+                            <>
+                                <Typography variant='h5' component='h2' className={classes.subsListTitle}>
+                                    <FormattedMessage
+                                        id={'Apis.Details.Credentials.Credentials.'
+                                        + 'api.credentials.subscribed.apps.title'}
+                                        defaultMessage='Subscriptions'
+                                    />
+                                </Typography>
+                                <Typography variant='body2' className={classes.subsListDesc}>
+                                    <FormattedMessage
+                                        id={'Apis.Details.Credentials.Credentials.'
+                                        + 'api.credentials.subscribed.apps.description'}
+                                        defaultMessage='( Applications Subscribed to this {type} )'
+                                        values={{ type: getTypeToDisplay(api.type) }}
+                                    />
+                                </Typography>
+                                <div className={classes.tableMain}>
+                                    <table id='subscription-table'>
+                                        <tr>
+                                            <th className={classes.th}>
+                                                <FormattedMessage
+                                                    id={'Apis.Details.Credentials.Credentials.'
+                                                    + 'api.credentials.subscribed.apps.name'}
+                                                    defaultMessage='Application Name'
+                                                />
+                                            </th>
+                                            <th className={classes.th}>
+                                                <FormattedMessage
+                                                    id={'Apis.Details.Credentials.Credentials.api.'
+                                                    + 'credentials.subscribed.apps.tier'}
+                                                    defaultMessage='Throttling Tier'
+                                                />
+                                            </th>
+                                            <th className={classes.th}>
+                                                <FormattedMessage
+                                                    id={'Apis.Details.Credentials.Credentials.'
+                                                    + 'api.credentials.subscribed.apps.status'}
+                                                    defaultMessage='Application Status'
+                                                />
+                                            </th>
+                                            <th className={classes.th}>
+                                                <FormattedMessage
+                                                    id={'Apis.Details.Credentials.Credentials.'
+                                                    + 'api.credentials.subscribed.apps.action'}
+                                                    defaultMessage='Actions'
+                                                />
+                                            </th>
+                                        </tr>
+                                        {subscribedApplications.map((app, index) => (
+                                            <SubscriptionTableRow
+                                                key={app.id}
+                                                loadInfo={this.loadInfo}
+                                                isKeyManagerAllowed={this.isKeyManagerAllowed}
+                                                handleSubscriptionDelete={this.handleSubscriptionDelete}
+                                                selectedAppId={selectedAppId}
+                                                updateSubscriptionData={updateSubscriptionData}
+                                                selectedKeyType={selectedKeyType}
+                                                app={app}
+                                                index={index}
+                                                applicationOwner={applicationOwner}
+                                                hashEnabled={hashEnabled}
+                                            />
+                                        ))}
+                                    </table>
+                                </div>
+                            </>
+                        )}
+                    </>
+                );
+            }
+        };
+        return (
+            <StyledGrid container>
+                <Grid item md={12} lg={11}>
+                    <Grid container spacing={2}>
+                        <Grid item md={12}>
+                            {api.advertiseInfo && api.advertiseInfo.advertised
+                                && api.advertiseInfo.originalDevPortalUrl && (
+                                <OriginalDevportalDetails
+                                    classes={classes}
+                                    originalDevPortalUrl={api.advertiseInfo.originalDevPortalUrl}
+                                />
+                            )}
+                            {api.tiers.length > 0 ? (
+                                <>
+                                    <Typography
+                                        onClick={this.handleExpandClick}
+                                        variant='h4'
+                                        component='div'
+                                        className={classes.titleSub}
+                                    >
+                                        {applicationsAvailable.length > 0 && (
+                                            <Link
+                                                to={(isOnlyMutualSSL || isOnlyBasicAuth
+                                                    || !isSetAllorResidentKeyManagers) ? null
+                                                    : getBasePath(api.type) + api.id + '/credentials/wizard'}
+                                                style={!api.isSubscriptionAvailable
+                                                    ? { pointerEvents: 'none' } : null}
+                                                className={classes.addLinkWrapper}
+                                                component={RouterLink}
+                                                underline='hover'
+                                            >
+                                                <Button
+                                                    color='secondary'
+                                                    disabled={!api.isSubscriptionAvailable || isOnlyMutualSSL
+                                                    || isOnlyBasicAuth
+                                                    || !isSetAllorResidentKeyManagers}
+                                                    size='small'
+                                                    id='start-key-gen-wizard-btn'
+                                                >
+                                                    <Icon>add_circle_outline</Icon>
+                                                    <FormattedMessage
+                                                        id={'Apis.Details.Credentials.'
+                                                        + 'SubscibeButtonPanel.subscribe.wizard.with.new.app'}
+                                                        defaultMessage='Subscription & Key Generation Wizard'
+                                                    />
+                                                </Button>
+                                            </Link>
+                                        )}
+                                    </Typography>
+                                    <Paper elevation={0} className={classes.paper}>
+                                        <Typography variant='body2' className={classes.descWrapper}>
+                                            <FormattedMessage
+                                                id='Apis.Details.Credentials.Credentials.'
+                                                defaultMessage={`An application is primarily used to decouple the 
+                                                consumer from the {type}s. It allows you to generate and use a single 
+                                                key for multiple {type}s and subscribe multiple times to a single {type} 
+                                                with different SLA levels.`}
+                                                values={{ type: getTypeToDisplay(api.type) }}
+                                            />
+                                        </Typography>
+                                        {renderCredentialInfo()}
+                                    </Paper>
+                                </>
+                            ) : (
+                                <Paper elevation={0} className={classes.paper}>
+                                    <InlineMessage type='info' className={classes.dialogContainer}>
+                                        <Typography component='p' data-testid='itest-no-tier-dialog'>
+                                            <FormattedMessage
+                                                id='Apis.Details.Creadentials.credetials.no.tiers'
+                                                defaultMessage='No tiers are available for the {type}.'
+                                                values={{ type: getTypeToDisplay(api.type) }}
+                                            />
+                                        </Typography>
+                                    </InlineMessage>
+                                </Paper>
+                            )}
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </StyledGrid>
+        );
+    }
+}
+
+Credentials.propTypes = {
+    classes: PropTypes.shape({
+        contentWrapper: PropTypes.string,
+        titleSub: PropTypes.string,
+        tableMain: PropTypes.string,
+        th: PropTypes.string,
+        paper: PropTypes.string,
+        descWrapper: PropTypes.string,
+        generateCredentialWrapper: PropTypes.string,
+        credentialBoxWrapper: PropTypes.string,
+        credentialBox: PropTypes.string,
+        buttonElm: PropTypes.string,
+        dialogContainer: PropTypes.string,
+    }).isRequired,
+    history: PropTypes.shape({}).isRequired,
+    intl: PropTypes.shape({}).isRequired,
+};
+Credentials.contextType = ApiContext;
+
+export default injectIntl((Credentials));
