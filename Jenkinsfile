@@ -30,18 +30,21 @@ pipeline {
                 checkout scm
                 script {
                     env.GIT_SHA = bat(
-                        script: '@git rev-parse --short HEAD',
-                        returnStdout: true
-                    ).trim()
+    script: '@git rev-parse --short HEAD',
+    returnStdout: true
+).trim().readLines().last().trim()
 
-                    env.BRANCH = bat(
-                        script: '@git rev-parse --abbrev-ref HEAD',
-                        returnStdout: true
-                    ).trim()
+env.BRANCH = bat(
+    script: '@git rev-parse --abbrev-ref HEAD',
+    returnStdout: true
+).trim().readLines().last().trim()
 
-                    if (env.BRANCH == "HEAD") {
-                        env.BRANCH = "develop"
-                    }
+if (!env.BRANCH || env.BRANCH == "HEAD" || env.BRANCH == "null") {
+    env.BRANCH = "develop"
+}
+
+echo "Branch detected: '${env.BRANCH}'"
+echo "GIT_SHA detected: '${env.GIT_SHA}'"
 
                     if (env.BRANCH == "main") {
                         env.IMAGE_TAG = "${BASE_VERSION}"
