@@ -1,3 +1,38 @@
+final String comparatorRegex   = 'REGEXP'
+final String branchMain        = 'main'
+final String branchDevelop     = 'develop'
+final String releaseBranchPattern = /^release\/(\d+\.\d+\.\d+)$/
+final String hotfixBranchPattern  = /^hotfix\/(\d+\.\d+\.\d+)$/
+
+// Docker tags may not contain '+' -> replace with '_'
+String dockerTag(String version) {
+    return version.replace('+', '_')
+}
+
+// Splits "4.7.0+0.4.0-RC1" into [wso2: '4.7.0', custom: '0.4.0', tag: 'RC1']
+Map parseVersion(String raw) {
+    def m = raw.trim() =~ /^(\d+\.\d+\.\d+)\+(\d+\.\d+\.\d+)(?:-(.+))?$/
+    if (!m) {
+        error("VERSION file malformed: '${raw}' (expected <WSO2>+<MAJOR.MINOR.PATCH>[-TAG])")
+    }
+    return [wso2: m[0][1], custom: m[0][2], tag: m[0][3] ?: '']
+}
+
+void runCheckedStep(String checkName, String title, Closure body) {
+    String completed = 'COMPLETED'
+    publishChecks name: checkName, title: title, status: 'IN_PROGRESS'
+    try {
+        body()
+        publishChecks name: checkName, title: title,
+                      status: completed, conclusion: 'SUCCESS'
+    } catch (err) {
+        publishChecks name: checkName, title: title,
+                      status: completed, conclusion: 'FAILURE',
+                      summary: "Failed: ${err.message}"
+        throw err
+    }
+}
+
 pipeline {
     agent any
 
@@ -8,208 +43,272 @@ pipeline {
     }
 
     environment {
-        IMAGE_NAME     = "sab4r/wso2am-custom"
+        IMAGE_NAME      = "sab4r/wso2am-custom"
         DOCKER_REGISTRY = "docker.io"
-
-        GITHUB_CREDS   = "github-credentials"
-        DOCKER_CREDS   = "dockerhub-credentials"
-
-        REPO_OWNER    = "WSO2-Project"
-        APP_REPO      = "wso2-apim-app"
-        HELM_REPO     = "wso2-apim-helm"
-
-        HELM_BRANCH   = "main"
-        HELM_PATH     = "wso2-chart"
-
-        BASE_VERSION  = "4.7.0"
+        GITHUB_CREDS    = "github-credentials"
+        GITHUB_APP      = "github-app-jenkins"
+        DOCKER_CREDS    = "dockerhub-credentials"
+        REPO_OWNER      = "WSO2-Project"
+        APP_REPO        = "wso2-apim-app"
+        HELM_REPO       = "wso2-apim-helm"
+        HELM_BRANCH     = "main"
+        HELM_PATH       = "wso2-chart"
     }
 
     stages {
-        stage('Checkout') {
+
+        stage('Init') {
             steps {
-                checkout scm
                 script {
-                    env.GIT_SHA = bat(
-    script: '@git rev-parse --short HEAD',
-    returnStdout: true
-).trim().readLines().last().trim()
+                    runCheckedStep('init', 'Resolve version & image tag') {
 
-env.BRANCH = bat(
-    script: '@git rev-parse --abbrev-ref HEAD',
-    returnStdout: true
-).trim().readLines().last().trim()
+                        env.GIT_SHA = sh(
+                            script: 'git rev-parse --short HEAD',
+                            returnStdout: true
+                        ).trim()
 
-if (!env.BRANCH || env.BRANCH == "HEAD" || env.BRANCH == "null") {
-    env.BRANCH = "develop"
-}
+                        env.RAW_VERSION = readFile('VERSION').trim()
+                        def v = parseVersion(env.RAW_VERSION)
+                        env.WSO2_VERSION   = v.wso2
+                        env.CUSTOM_VERSION = v.custom
+                        env.VERSION_TAG    = v.tag
 
-echo "Branch detected: '${env.BRANCH}'"
-echo "GIT_SHA detected: '${env.GIT_SHA}'"
+                        // release/* resolves its tag later in 'Compute RC tag'
+                        if (env.BRANCH_NAME ==~ releaseBranchPattern) {
+                            env.DEPLOY_ENV = 'staging'
+                            echo "Release branch detected - IMAGE_TAG deferred to 'Compute RC tag'"
 
-                    if (env.BRANCH == "main") {
-                        env.IMAGE_TAG = "${BASE_VERSION}"
-                        env.DEPLOY_ENV = "production"
-                    } else if (env.BRANCH == "develop") {
-                        env.IMAGE_TAG = "${BASE_VERSION}-dev-${env.GIT_SHA}"
-                        env.DEPLOY_ENV = "staging"
-                    } else if (env.BRANCH.startsWith("release/")) {
-                        def version = env.BRANCH.replace("release/", "")
-                        env.IMAGE_TAG = "${version}-rc"
-                        env.DEPLOY_ENV = "staging"
-                    } else if (env.BRANCH.startsWith("hotfix/")) {
-                        def version = env.BRANCH.replace("hotfix/", "")
-                        env.IMAGE_TAG = "${version}-hotfix-${env.GIT_SHA}"
-                        env.DEPLOY_ENV = "staging"
-                    } else {
-                        env.IMAGE_TAG = "${BASE_VERSION}-feature-${env.GIT_SHA}"
-                        env.DEPLOY_ENV = "none"
+                        } else if (env.BRANCH_NAME == branchMain) {
+                            if (v.tag) {
+                                error("main must carry a final VERSION, got pre-release tag '-${v.tag}'")
+                            }
+                            env.IMAGE_TAG  = dockerTag("${v.wso2}+${v.custom}")
+                            env.DEPLOY_ENV = 'production'
+
+                        } else if (env.BRANCH_NAME == branchDevelop || env.BRANCH_NAME ==~ hotfixBranchPattern) {
+                            if (v.tag != 'SNAPSHOT') {
+                                error("${env.BRANCH_NAME} expects a -SNAPSHOT VERSION, got '-${v.tag ?: '(none)'}'")
+                            }
+                            env.IMAGE_TAG  = dockerTag("${v.wso2}+${v.custom}-SNAPSHOT-${env.GIT_SHA}")
+                            env.DEPLOY_ENV = 'staging'
+
+                        } else if (env.CHANGE_ID) {
+                            env.IMAGE_TAG  = dockerTag("${v.wso2}+${v.custom}-pr${env.CHANGE_ID}-${env.GIT_SHA}")
+                            env.DEPLOY_ENV = 'none'
+
+                        } else {
+                            env.IMAGE_TAG  = dockerTag("${v.wso2}+${v.custom}-${env.GIT_SHA}")
+                            env.DEPLOY_ENV = 'none'
+                        }
+
+                        if (env.IMAGE_TAG) {
+                            currentBuild.displayName = "[${env.BRANCH_NAME}] ${env.IMAGE_NAME}:${env.IMAGE_TAG}"
+                        }
+
+                        echo """
+                        Branch      : ${env.BRANCH_NAME}
+                        Git SHA     : ${env.GIT_SHA}
+                        VERSION     : ${env.RAW_VERSION}
+                        Image Tag   : ${env.IMAGE_TAG ?: '(deferred)'}
+                        Deploy Env  : ${env.DEPLOY_ENV}
+                        """
                     }
-
-                    currentBuild.displayName = "[${env.BRANCH}] ${env.IMAGE_TAG}"
-
-                    echo """
-
-WSO2 API MANAGER CI/CD
-
-Branch        : ${env.BRANCH}
-Commit        : ${env.GIT_SHA}
-Docker Image  : ${IMAGE_NAME}
-Docker Tag    : ${env.IMAGE_TAG}
-Environment   : ${env.DEPLOY_ENV}
-
-"""
                 }
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Compute RC tag') {
+            when {
+                allOf {
+                    not { changeRequest() }
+                    branch pattern: 'release/.*', comparator: comparatorRegex
+                }
+            }
             steps {
-                bat """
-                docker build ^
-                  --no-cache ^
-                  --label git-sha=${env.GIT_SHA} ^
-                  --label branch=${env.BRANCH} ^
-                  -t ${IMAGE_NAME}:${env.IMAGE_TAG} .
-                """
+                script {
+                    runCheckedStep('rc-tag', 'Compute, commit & create RC tag') {
+                        def m = env.BRANCH_NAME =~ releaseBranchPattern
+                        if (!m) { error("Branch doesn't match release/X.Y.Z: ${env.BRANCH_NAME}") }
+                        env.RELEASE_VERSION = m[0][1]
+
+                        if (env.RELEASE_VERSION != env.CUSTOM_VERSION) {
+                            error("Branch version (${env.RELEASE_VERSION}) != VERSION file custom version (${env.CUSTOM_VERSION})")
+                        }
+
+                        withCredentials([gitUsernamePassword(credentialsId: env.GITHUB_APP)]) {
+                            sh 'git fetch --tags --force'
+
+                            // Match both legacy '-rc.N' and current '-RCN'
+                            def existing = sh(
+                                script: "git tag -l 'v${env.RELEASE_VERSION}-RC*' 'v${env.RELEASE_VERSION}-rc.*'",
+                                returnStdout: true
+                            ).trim()
+
+                            int nextRc = 1
+                            if (existing) {
+                                int highest = 0
+                                existing.readLines().each { line ->
+                                    def rc = line.trim() =~ /-[Rr][Cc]\.?(\d+)$/
+                                    if (rc) {
+                                        int n = rc[0][1] as int
+                                        if (n > highest) { highest = n }
+                                    }
+                                }
+                                nextRc = highest + 1
+                            }
+
+                            env.RC_NUMBER  = "${nextRc}"
+                            env.RC_TAG     = "v${env.RELEASE_VERSION}-RC${nextRc}"
+                            env.NEW_VERSION = "${env.WSO2_VERSION}+${env.RELEASE_VERSION}-RC${nextRc}"
+                            env.IMAGE_TAG   = dockerTag(env.NEW_VERSION)
+
+                            writeFile file: 'VERSION', text: "${env.NEW_VERSION}\n"
+
+                            sh """
+                                git config user.email 'jenkins-ci@wso2-project'
+                                git config user.name 'Jenkins CI'
+
+                                git add VERSION
+                                git commit -m 'ci: bump VERSION to ${env.NEW_VERSION} [skip ci]'
+                                git tag -a ${env.RC_TAG} -m 'Release candidate ${nextRc} for ${env.RELEASE_VERSION}'
+
+                                git push origin HEAD:${env.BRANCH_NAME}
+                                git push origin ${env.RC_TAG}
+                            """
+                        }
+
+                        currentBuild.displayName = "[${env.BRANCH_NAME}] ${env.IMAGE_NAME}:${env.IMAGE_TAG}"
+                        echo "RC tag ${env.RC_TAG} created - image tag ${env.IMAGE_TAG}"
+                    }
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                script {
+                    runCheckedStep('build', 'Build Docker image') {
+                        echo "Build ${env.IMAGE_NAME}:${env.IMAGE_TAG}"
+                        sh """
+                        docker build \\
+                          --no-cache \\
+                          --label git-sha=${env.GIT_SHA} \\
+                          --label branch=${env.BRANCH_NAME} \\
+                          --label version=${env.RAW_VERSION} \\
+                          -t ${env.IMAGE_NAME}:${env.IMAGE_TAG} .
+                        """
+                    }
+                }
             }
         }
 
         stage('Inspect Image') {
             steps {
-                bat """
-                docker image inspect ${IMAGE_NAME}:${env.IMAGE_TAG}
-                """
+                script {
+                    runCheckedStep('inspect', 'Inspect Docker image') {
+                        sh "docker image inspect ${env.IMAGE_NAME}:${env.IMAGE_TAG}"
+                    }
+                }
             }
         }
 
         stage('Smoke Test') {
             steps {
-                bat """
-                docker rm -f wso2-test-${env.GIT_SHA} 2>nul
+                script {
+                    runCheckedStep('smoke_test', 'Smoke test') {
+                        sh """
+                        docker rm -f wso2-test-${env.GIT_SHA} 2>/dev/null || true
 
-                docker run -d ^
-                  --name wso2-test-${env.GIT_SHA} ^
-                  -p 19443:9443 ^
-                  ${IMAGE_NAME}:${env.IMAGE_TAG}
+                        docker run -d \\
+                          --name wso2-test-${env.GIT_SHA} \\
+                          -p 19443:9443 \\
+                          ${env.IMAGE_NAME}:${env.IMAGE_TAG}
 
-                timeout /t 20 /nobreak >nul
+                        sleep 20
 
-                docker logs wso2-test-${env.GIT_SHA}
+                        docker logs wso2-test-${env.GIT_SHA}
 
-                docker stop wso2-test-${env.GIT_SHA}
-                docker rm wso2-test-${env.GIT_SHA}
-                """
+                        docker stop wso2-test-${env.GIT_SHA}
+                        docker rm wso2-test-${env.GIT_SHA}
+                        """
+                    }
+                }
             }
         }
 
-        stage('Push Docker Image') {
+        stage('Push') {
             when {
-                expression {
-                    env.BRANCH == "develop" ||
-                    env.BRANCH == "main" ||
-                    env.BRANCH.startsWith("release/") ||
-                    env.BRANCH.startsWith("hotfix/")
+                allOf {
+                    not { changeRequest() }
+                    anyOf {
+                        branch branchDevelop
+                        branch branchMain
+                        branch pattern: 'release/.*', comparator: comparatorRegex
+                        branch pattern: 'hotfix/.*',  comparator: comparatorRegex
+                    }
                 }
             }
             steps {
                 script {
-                    docker.withRegistry("https://${DOCKER_REGISTRY}", DOCKER_CREDS) {
-                        docker.image("${IMAGE_NAME}:${env.IMAGE_TAG}").push()
-                        echo "Docker image pushed: ${IMAGE_NAME}:${env.IMAGE_TAG}"
+                    runCheckedStep('push', 'Push to Docker Hub') {
+                        docker.withRegistry("https://${env.DOCKER_REGISTRY}", env.DOCKER_CREDS) {
+                            docker.image("${env.IMAGE_NAME}:${env.IMAGE_TAG}").push()
+                            echo "Docker image pushed: ${env.IMAGE_NAME}:${env.IMAGE_TAG}"
 
-                        if (env.BRANCH == "main") {
-                            docker.image("${IMAGE_NAME}:${env.IMAGE_TAG}").push("latest")
-                            echo "Docker image pushed: ${IMAGE_NAME}:latest"
+                            if (env.BRANCH_NAME == branchMain) {
+                                docker.image("${env.IMAGE_NAME}:${env.IMAGE_TAG}").push('latest')
+                                echo "Docker image pushed: ${env.IMAGE_NAME}:latest"
+                            }
                         }
                     }
                 }
             }
         }
 
-        stage('Update Helm Repository') {
+        stage('Update Helm') {
             when {
-                expression {
-                    env.BRANCH == "develop" ||
-                    env.BRANCH == "main" ||
-                    env.BRANCH.startsWith("release/") ||
-                    env.BRANCH.startsWith("hotfix/")
+                allOf {
+                    not { changeRequest() }
+                    anyOf {
+                        branch branchDevelop
+                        branch branchMain
+                    }
                 }
             }
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: GITHUB_CREDS,
-                    usernameVariable: 'GIT_USER',
-                    passwordVariable: 'GIT_TOKEN'
-                )]) {
-                    bat """
-                    git config --global user.name "Jenkins"
-                    git config --global user.email "jenkins@company.com"
+                script {
+                    runCheckedStep('helm', 'Update Helm values') {
+                        echo 'Update helm-repo values.yaml'
 
-                    if exist helm-repo-temp rmdir /S /Q helm-repo-temp
+                        withCredentials([usernamePassword(
+                            credentialsId: env.GITHUB_CREDS,
+                            usernameVariable: 'GIT_USER',
+                            passwordVariable: 'GIT_TOKEN'
+                        )]) {
+                            sh """
+                            git config --global user.name "Jenkins"
+                            git config --global user.email "jenkins@company.com"
 
-                    git clone https://%GIT_USER%:%GIT_TOKEN%@github.com/${REPO_OWNER}/${HELM_REPO}.git helm-repo-temp
-                    cd helm-repo-temp
-                    git checkout ${HELM_BRANCH}
+                            rm -rf helm-repo-temp
 
-                    powershell -NoProfile -Command ^
-                      "(Get-Content '${HELM_PATH}\\values.yaml') -replace 'tag:.*','tag: ${env.IMAGE_TAG}' | Set-Content '${HELM_PATH}\\values.yaml'"
+                            git clone https://${GIT_USER}:${GIT_TOKEN}@github.com/${env.REPO_OWNER}/${env.HELM_REPO}.git helm-repo-temp
+                            cd helm-repo-temp
+                            git checkout ${env.HELM_BRANCH}
 
-                    git add ${HELM_PATH}\\values.yaml
+                            sed -i 's|tag:.*|tag: ${env.IMAGE_TAG}|' ${env.HELM_PATH}/values.yaml
 
-                    git diff --cached --quiet
-                    if errorlevel 1 (
-                        git commit -m \"ci: update image tag ${env.IMAGE_TAG} [skip ci]\"
-                        git push origin ${HELM_BRANCH}
-                    ) else (
-                        echo No changes detected.
-                    )
-                    """
-                    echo "Helm repository updated."
-                }
-            }
-        }
+                            git add ${env.HELM_PATH}/values.yaml
 
-        stage('Create Git Tag') {
-            when {
-                expression { env.BRANCH == "main" }
-            }
-            steps {
-                withCredentials([usernamePassword(
-                    credentialsId: GITHUB_CREDS,
-                    usernameVariable: 'GIT_USER',
-                    passwordVariable: 'GIT_TOKEN'
-                )]) {
-                    bat """
-                    git fetch --tags
-                    git ls-remote --tags origin v${BASE_VERSION} >nul 2>nul
-                    if errorlevel 1 (
-                        git tag -a v${BASE_VERSION} -m "Release ${BASE_VERSION}"
-                        git push https://%GIT_USER%:%GIT_TOKEN%@github.com/${REPO_OWNER}/${APP_REPO}.git v${BASE_VERSION}
-                        echo Git tag v${BASE_VERSION} created.
-                    ) else (
-                        echo Git tag already exists.
-                    )
-                    """
+                            if ! git diff --cached --quiet; then
+                                git commit -m "ci: update image tag ${env.IMAGE_TAG} [skip ci]"
+                                git push origin ${env.HELM_BRANCH}
+                            else
+                                echo 'No changes detected.'
+                            fi
+                            """
+                            echo 'Helm repository updated.'
+                        }
+                    }
                 }
             }
         }
@@ -218,33 +317,33 @@ Environment   : ${env.DEPLOY_ENV}
     post {
         success {
             echo """
-
-PIPELINE SUCCESS
-Branch       : ${env.BRANCH}
-Commit       : ${env.GIT_SHA}
-Image        : ${IMAGE_NAME}:${env.IMAGE_TAG}
-Environment  : ${env.DEPLOY_ENV}
-Build Number : ${BUILD_NUMBER}
-
-"""
+            PIPELINE SUCCESS
+            Branch       : ${env.BRANCH_NAME}
+            Commit       : ${env.GIT_SHA ?: 'n/a'}
+            Version      : ${env.RAW_VERSION ?: 'n/a'}
+            Image        : ${env.IMAGE_NAME}:${env.IMAGE_TAG ?: 'n/a'}
+            Build Number : ${env.BUILD_NUMBER}
+            """
         }
         failure {
             echo """
-
-PIPELINE FAILED
-Branch       : ${env.BRANCH}
-Commit       : ${env.GIT_SHA}
-Image        : ${IMAGE_NAME}:${env.IMAGE_TAG}
-Build Number : ${BUILD_NUMBER}
-
-"""
+            PIPELINE FAILED
+            Branch       : ${env.BRANCH_NAME}
+            Commit       : ${env.GIT_SHA ?: 'n/a'}
+            Version      : ${env.RAW_VERSION ?: 'n/a'}
+            Image        : ${env.IMAGE_NAME}:${env.IMAGE_TAG ?: 'n/a'}
+            Build Number : ${env.BUILD_NUMBER}
+            """
         }
         always {
-            bat """
-            docker rm -f wso2-test-${env.GIT_SHA} 2>nul
-            docker rmi ${IMAGE_NAME}:${env.IMAGE_TAG} 2>nul
-            exit /b 0
-            """
+            script {
+                if (env.GIT_SHA) {
+                    sh "docker rm -f wso2-test-${env.GIT_SHA} 2>/dev/null || true"
+                }
+                if (env.IMAGE_TAG) {
+                    sh "docker rmi ${env.IMAGE_NAME}:${env.IMAGE_TAG} 2>/dev/null || true"
+                }
+            }
             cleanWs()
         }
     }
