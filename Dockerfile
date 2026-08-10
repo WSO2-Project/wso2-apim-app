@@ -12,8 +12,8 @@ COPY ui-customization/admin/site/public/ \
      /home/wso2carbon/wso2am-4.7.0/repository/deployment/server/webapps/admin/site/public/
 
 # Copy Developer Portal UI customizations (uncomment when ready)
-# COPY ui-customization/devportal/site/public/ \
-#      /home/wso2carbon/wso2am-4.7.0/repository/deployment/server/webapps/devportal/site/public/
+COPY ui-customization/devportal/site/public/ \
+     /home/wso2carbon/wso2am-4.7.0/repository/deployment/server/webapps/devportal/site/public/
 
 # Copy custom deployment.toml (uncomment when ready)
 # COPY conf/deployment.toml \
