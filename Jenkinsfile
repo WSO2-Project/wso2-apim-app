@@ -44,7 +44,7 @@ pipeline {
 
     environment {
         IMAGE_NAME      = "sab4r/wso2am-custom"
-        DOCKER_REGISTRY = "docker.io"
+        DOCKER_REGISTRY = "index.docker.io/v1/"
         GITHUB_CREDS    = "github-credentials"
         GITHUB_APP      = "github-app-jenkins"
         DOCKER_CREDS    = "dockerhub-credentials"
