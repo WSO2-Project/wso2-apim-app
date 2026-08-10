@@ -296,8 +296,10 @@ pipeline {
                             git checkout ${env.HELM_BRANCH}
 
                             sed -i 's|tag:.*|tag: ${env.IMAGE_TAG}|' ${env.HELM_PATH}/values.yaml
+                            sed -i 's|tag:.*|tag: ${env.IMAGE_TAG}|' ${env.HELM_PATH}/values-gateway.yml
 
                             git add ${env.HELM_PATH}/values.yaml
+                            git add ${env.HELM_PATH}/values-gateway.yml
 
                             if ! git diff --cached --quiet; then
                                 git commit -m "ci: update image tag ${env.IMAGE_TAG} [skip ci]"
