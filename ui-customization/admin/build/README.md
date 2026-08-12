@@ -1,1 +1,0 @@
-## This build directory is only used in `mvn` build
