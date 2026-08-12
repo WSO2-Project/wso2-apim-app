@@ -40,11 +40,12 @@ const StyledFooter = styled('footer')({
  * @returns {JSX}.
  */
 function Copyright() {
+    const version = props.version | 'dev'
     return (
         <Typography variant='body2' color='white' align='center' sx={{ p: '16px' }}>
             <FormattedMessage
                 id='Base.Footer.Footer.product_details'
-                defaultMessage='WSO2 API-M v4.7.0 | © 2026 Inetum Tunisie'
+                defaultMessage={ 'WSO2 API-M' +  version + '| © 2026 Inetum Tunisie' }
             />
         </Typography>
     );
