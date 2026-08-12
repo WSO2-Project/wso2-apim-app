@@ -36,7 +36,7 @@ COPY ui-customization/admin/override/     /build/webapps/admin/override/
 # --- 2d. Production builds for all three portals ---
 RUN cd /build/webapps/devportal && npm run build:prod
 RUN cd /build/webapps/publisher && npm run build:prod
-RUN cd /build/webapps/admin     && npm run build:prod
+RUN cd /build/webapps/admin && npm install && npm run build:prod
 
 # ================================================================
 # Stage 3: Final runtime image
