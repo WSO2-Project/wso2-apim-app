@@ -30,7 +30,7 @@ const StyledNav = styled('nav')({});
 
 const StyledFooter = styled('footer')({
     padding: 2,
-    background: '#1F4E79',
+    background: '#a1b384',
     position: 'relative',
     bottom: 0,
 });
