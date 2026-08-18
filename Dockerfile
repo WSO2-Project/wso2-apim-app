@@ -30,6 +30,8 @@ RUN npm run bootstrap
 # --- 2c. Layer your override files on top of the source ---
 # Only override/ comes from your app repo. source/ stays untouched.
 COPY ui-customization/devportal/override/ /build/webapps/devportal/override/
+COPY ui-customization/devportal/index.jsp /build/webapps/devportal/site/public/pages/index.jsp
+
 COPY ui-customization/publisher/override/ /build/webapps/publisher/override/
 #COPY ui-customization/admin/override/     /build/webapps/admin/override/
 

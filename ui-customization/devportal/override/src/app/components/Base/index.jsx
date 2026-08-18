@@ -276,7 +276,6 @@ class LayoutLegacy extends React.Component {
             selected: 'home',
             anchorEl: null,
             bannerHeight: 0,
-            version: props.version || 'dev'
         };
         this.toggleGlobalNavBar = this.toggleGlobalNavBar.bind(this);
         const { history } = props;
@@ -762,7 +761,7 @@ class LayoutLegacy extends React.Component {
                                 </>
                             ) : (
                                 <Typography noWrap>
-                                    WSO2 {version} | Inetum Tunisie
+                                    WSO2 {window.__ENV?.VERSION || 'unknown'} | Inetum Tunisie
                                 </Typography>
                             )}
                         </footer>
