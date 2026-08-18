@@ -219,7 +219,7 @@ pipeline {
                     anyOf {
                         branch branchDevelop
                         branch branchMain
-                        branch pattetn: 'feature/.*', comparator: comparatorRegex
+                        branch pattern: 'feature/.*', comparator: comparatorRegex
                         branch pattern: 'release/.*', comparator: comparatorRegex
                         branch pattern: 'hotfix/.*',  comparator: comparatorRegex
                     }
@@ -249,7 +249,7 @@ pipeline {
                     anyOf {
                         branch branchDevelop
                         branch branchMain
-                        branch pattetn: 'feature/.*', comparator: comparatorRegex
+                        branch pattern: 'feature/.*', comparator: comparatorRegex
                     }
                 }
             }

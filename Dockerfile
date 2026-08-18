@@ -24,7 +24,6 @@ COPY --from=webapps-source \
 # npm install at root handles everything if npm workspaces are configured
 RUN npm install
 
-# lerna bootstrap fallback — runs only if the script exists (older WSO2 versions)
 RUN npm run bootstrap
 
 # --- 2c. Layer your override files on top of the source ---
@@ -32,12 +31,12 @@ RUN npm run bootstrap
 COPY ui-customization/devportal/override/ /build/webapps/devportal/override/
 COPY ui-customization/devportal/index.jsp /build/webapps/devportal/site/public/pages/index.jsp
 
-COPY ui-customization/publisher/override/ /build/webapps/publisher/override/
+# COPY ui-customization/publisher/override/ /build/webapps/publisher/override/
 #COPY ui-customization/admin/override/     /build/webapps/admin/override/
 
 # --- 2d. Production builds for all three portals ---
 RUN cd /build/webapps/devportal && npm run build:prod
-RUN cd /build/webapps/publisher && npm run build:prod
+# RUN cd /build/webapps/publisher && npm run build:prod
 # RUN cd /build/webapps/admin && npm install && npm run build:prod
 
 # ================================================================
@@ -50,20 +49,20 @@ USER root
 # --- Devportal artifacts ---
 COPY --from=ui-build /build/webapps/devportal/site/public/dist/ \
      /home/wso2carbon/wso2am-4.7.0/repository/deployment/server/webapps/devportal/site/public/dist/
-COPY --from=ui-build /build/webapps/devportal/site/public/pages/index.jsp \
+COPY ui-customization/devportal/index.jsp \
      /home/wso2carbon/wso2am-4.7.0/repository/deployment/server/webapps/devportal/site/public/pages/index.jsp
 
 # --- Publisher artifacts ---
-COPY --from=ui-build /build/webapps/publisher/site/public/dist/ \
-     /home/wso2carbon/wso2am-4.7.0/repository/deployment/server/webapps/publisher/site/public/dist/
-COPY --from=ui-build /build/webapps/publisher/site/public/pages/index.jsp \
-     /home/wso2carbon/wso2am-4.7.0/repository/deployment/server/webapps/publisher/site/public/pages/index.jsp
+# COPY --from=ui-build /build/webapps/publisher/site/public/dist/ \
+ #    /home/wso2carbon/wso2am-4.7.0/repository/deployment/server/webapps/publisher/site/public/dist/
+# COPY --from=ui-build /build/webapps/publisher/site/public/pages/index.jsp \
+  #   /home/wso2carbon/wso2am-4.7.0/repository/deployment/server/webapps/publisher/site/public/pages/index.jsp
 
 # --- Admin artifacts ---
-COPY --from=ui-build /build/webapps/admin/site/public/dist/ \
-     /home/wso2carbon/wso2am-4.7.0/repository/deployment/server/webapps/admin/site/public/dist/
-COPY --from=ui-build /build/webapps/admin/site/public/pages/index.jsp \
-     /home/wso2carbon/wso2am-4.7.0/repository/deployment/server/webapps/admin/site/public/pages/index.jsp
+#COPY --from=ui-build /build/webapps/admin/site/public/dist/ \
+#     /home/wso2carbon/wso2am-4.7.0/repository/deployment/server/webapps/admin/site/public/dist/
+#COPY --from=ui-build /build/webapps/admin/site/public/pages/index.jsp \
+#     /home/wso2carbon/wso2am-4.7.0/repository/deployment/server/webapps/admin/site/public/pages/index.jsp
 
 USER wso2carbon
 
