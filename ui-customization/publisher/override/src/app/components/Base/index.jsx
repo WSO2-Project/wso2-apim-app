@@ -142,7 +142,6 @@ const Base = ({ children, user }) => {
             <div className={classes.wrapper}>
                 <Header user={user} />
                 <main className={classes.contentWrapper}>
-                    <div>WSO2 Custom version by Inetum Tunisie</div>
                     <div className={classes.drawerHeader} />
                     <div className={classes.contentRoot}>
                         {children}
