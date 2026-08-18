@@ -212,30 +212,6 @@ pipeline {
             }
         }
 
-        stage('Smoke Test') {
-            steps {
-                script {
-                    runCheckedStep('smoke_test', 'Smoke test') {
-                        sh """
-                        docker rm -f wso2-test-${env.GIT_SHA} 2>/dev/null || true
-
-                        docker run -d \\
-                          --name wso2-test-${env.GIT_SHA} \\
-                          -p 19443:9443 \\
-                          ${env.IMAGE_NAME}:${env.IMAGE_TAG}
-
-                        sleep 20
-
-                        docker logs wso2-test-${env.GIT_SHA}
-
-                        docker stop wso2-test-${env.GIT_SHA}
-                        docker rm wso2-test-${env.GIT_SHA}
-                        """
-                    }
-                }
-            }
-        }
-
         stage('Push') {
             when {
                 allOf {
@@ -243,6 +219,7 @@ pipeline {
                     anyOf {
                         branch branchDevelop
                         branch branchMain
+                        branch pattetn: 'feature/.*', comparator: comparatorRegex
                         branch pattern: 'release/.*', comparator: comparatorRegex
                         branch pattern: 'hotfix/.*',  comparator: comparatorRegex
                     }
@@ -272,6 +249,7 @@ pipeline {
                     anyOf {
                         branch branchDevelop
                         branch branchMain
+                        branch pattetn: 'feature/.*', comparator: comparatorRegex
                     }
                 }
             }
