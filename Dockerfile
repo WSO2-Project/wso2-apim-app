@@ -25,13 +25,21 @@ COPY --from=webapps-source \
 RUN npm install
 
 # lerna bootstrap fallback — runs only if the script exists (older WSO2 versions)
+<<<<<<< Updated upstream
 RUN if grep -q '"bootstrap"' package.json 2>/dev/null; then npm run bootstrap; fi
+=======
+RUN npm run bootstrap
+>>>>>>> Stashed changes
 
 # --- 2c. Layer your override files on top of the source ---
 # Only override/ comes from your app repo. source/ stays untouched.
 COPY ui-customization/devportal/override/ /build/webapps/devportal/override/
 COPY ui-customization/publisher/override/ /build/webapps/publisher/override/
+<<<<<<< Updated upstream
 COPY ui-customization/admin/override/     /build/webapps/admin/override/
+=======
+# COPY ui-customization/admin/override/     /build/webapps/admin/override/
+>>>>>>> Stashed changes
 
 # --- 2d. Production builds for all three portals ---
 RUN cd /build/webapps/devportal && npm run build:prod
