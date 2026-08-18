@@ -765,7 +765,7 @@ class LayoutLegacy extends React.Component {
                                     {footerText && footerText !== '' ? <span>{footerText}</span> : (
                                         <FormattedMessage
                                             id='Base.index.copyright.text'
-                                            defaultMessage={ 'WSO2 API-M' + {version} + '| © 2026 Inetum Tunisie' }
+                                            defaultMessage="WSO2 Custom version by Inetum Tunisie"
                                         />
                                     )}
                                 </Typography>
