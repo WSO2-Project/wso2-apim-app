@@ -15,12 +15,11 @@
   ~ specific language governing permissions and limitations
   ~ under the License.
 --%>
-
 <%@page import="org.apache.commons.logging.LogFactory"%>
 <%@page import="org.apache.commons.logging.Log"%>
 <%@page contentType="text/html" pageEncoding="UTF-8"%>
 <%@page import="java.util.Map"%>
-<%@page import="org.wso2.carbon.apimgt.ui.publisher.Util" %>
+<%@ page import="org.wso2.carbon.apimgt.ui.devportal.Util" %>
 
 <%@page trimDirectiveWhitespaces="true" %>
 
@@ -28,8 +27,9 @@
 <html lang="en">
     <%
         Log log = LogFactory.getLog(this.getClass());
-        Map settings = Util.readJsonFile("/site/public/conf/settings.json", request.getServletContext());
-        String context = Util.getTenantBasePublisherContext(request, (String) Util.readJsonObj(settings, "app.context"));
+        Map settings = Util.readJsonFile("/site/public/theme/settings.json", request.getServletContext());
+        String context = Util.getTenantBaseStoreContext(request, (String) Util.readJsonObj(settings, "app.context"));
+        String version = System.getenv("VERSION") != null ? System.getenv("VERSION") : "dev";
     %>
     <head>
         <base href="<%= context%>/" />
@@ -37,40 +37,36 @@
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
-        <title></title>
+        <title>[DevPortal] WSO2 APIM</title>
 
         <link rel="shortcut icon" href="<%= context%>/site/public/images/favicon.png">
+        <link rel="icon" type="image/png" href="<%= context%>/site/public/images/_favicon.png">
         <link href="<%= context%>/site/public/css/main.css" type="text/css" rel="stylesheet" />
-        <link href="<%= context%>/site/public/css/draftjs.css" type="text/css" rel="stylesheet" />
-    
+
         <script>
             window.__ENV = {
-                VERSION: "<%= System.getenv("VERSION") != null ? System.getenv("VERSION") : "dev" %>",
-                CONTEXT: "<%= context%>"
+                VERSION: "<%= version %>",
+                CONTEXT: "<%= context %>"
             };
         </script>
     </head>
-
-    <body>
-
+    <body dir="ltr">
         <div id="react-root">
             <div class="apim-dual-ring"></div>
         </div>
-
-        <script src="<%= context%>/site/public/fonts/iconfont/MaterialIcons.js"></script>
-        <script src="<%= context%>/site/public/conf/userThemes.js"></script>
-        <script src="<%= context%>/services/settings/settings.js"></script>
-        <script src="<%= context%>/site/public/conf/portalSettings.js"></script>
-        <script>
+        <script type="text/javascript" src="<%= context%>/site/public/theme/userTheme.js"></script>
+        <script type="text/javascript" src="<%= context%>/services/settings/settings.js"></script>
+        <script type="text/javascript">
             if (typeof module !== 'undefined') {
-                module.exports = AppConfig; // For Jest unit tests
+                module.exports = Settings; // For Jest unit tests
             }
         </script>
-        <script src="<%= context%>/site/public/dist/index.06c020fd713b24eb912d.bundle.js"></script>
-        <!-- Swagger worker has being removed until we resolve
-        *              https://github.com/wso2/product-apim/issues/10694 issue, need to change webpack config too -->
-        <!-- <script src="<%= context%>/"></script> -->
+        <script type="text/javascript">
+            Settings.app.customUrl.tenantDomain = '<%=Util.getCustomUrlEnabledDomain(request)%>';
+        </script>
+        <script src="<%= context%>/site/public/fonts/iconfont/MaterialIcons.js"></script>
+        <script src="<%= context%>/site/public/dist/index.2ff8f4670d0886876d7d.bundle.js"></script>
         <link rel="stylesheet" href="<%= context%>/site/public/fonts/iconfont/material-icons.css">
+        <link rel="stylesheet" href="<%= context%>/site/public/css/overrides.css">
     </body>
-
 </html>
