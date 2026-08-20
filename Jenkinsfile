@@ -186,6 +186,31 @@ pipeline {
             }
         }
 
+        stage('Generate version.json') {
+            steps {
+                script {
+                    runCheckedStep('version-json', 'Generate version.json') {
+                        def versionJson = [
+                            version    : env.RAW_VERSION,
+                            wso2Version: env.WSO2_VERSION,
+                            customVersion: env.CUSTOM_VERSION,
+                            tag        : env.VERSION_TAG ?: '',
+                            imageTag   : env.IMAGE_TAG,
+                            gitSha     : env.GIT_SHA,
+                            branch     : env.BRANCH_NAME,
+                            buildNumber: env.BUILD_NUMBER,
+                            buildDate  : sh(script: "date -u +'%Y-%m-%dT%H:%M:%SZ'", returnStdout: true).trim()
+                        ]
+
+                        writeJSON file: 'version.json', json: versionJson, pretty: 4
+
+                        echo "Generated version.json:"
+                        sh 'cat version.json'
+                    }
+                }
+            }
+        }
+
         stage('Build') {
             steps {
                 script {

@@ -18,7 +18,7 @@
  * under the License.
  */
 
-import React from 'react';
+import { useState, useEffect, React} from 'react';
 import { styled } from '@mui/material/styles';
 import { Link, withRouter } from 'react-router-dom';
 import { injectIntl, FormattedMessage } from 'react-intl';
@@ -432,6 +432,15 @@ class LayoutLegacy extends React.Component {
         const { tenantDomain, setTenantDomain } = this.context;
         const { customUrl: { tenantDomain: customUrlEnabledDomain } } = app;
 
+        const [version, setVersion] = useState('loading...')
+
+        useEffect(() => {
+            fetch('/devportal/site/public/version.json')
+            .then(res => res.json())
+            .then(data => setVersion(data.version))
+            .catch(() => setVersion('unknown'));
+        }, [])
+
         const user = AuthManager.getUser();
         // TODO: Refer to fix: https://github.com/mui-org/material-ui/issues/10076#issuecomment-361232810 ~tmkb
         let username = null;
@@ -761,7 +770,7 @@ class LayoutLegacy extends React.Component {
                                 </>
                             ) : (
                                 <Typography noWrap>
-                                    WSO2 {window.__ENV?.VERSION || 'unknown'} | Inetum Tunisie
+                                    WSO2 {version} | Inetum Tunisie
                                 </Typography>
                             )}
                         </footer>

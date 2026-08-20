@@ -29,7 +29,6 @@ RUN npm run bootstrap
 # --- 2c. Layer your override files on top of the source ---
 # Only override/ comes from your app repo. source/ stays untouched.
 COPY ui-customization/devportal/override/ /build/webapps/devportal/override/
-COPY ui-customization/devportal/index.jsp /build/webapps/devportal/site/public/pages/index.jsp
 
 # COPY ui-customization/publisher/override/ /build/webapps/publisher/override/
 #COPY ui-customization/admin/override/     /build/webapps/admin/override/
@@ -46,10 +45,12 @@ FROM wso2/wso2am:4.7.0
 
 USER root
 
+COPY VERSION /home/wso2carbon/wso2am-4.7.0/repository/deployment/server/webapps/devportal/version.json
+
 # --- Devportal artifacts ---
 COPY --from=ui-build /build/webapps/devportal/site/public/dist/ \
      /home/wso2carbon/wso2am-4.7.0/repository/deployment/server/webapps/devportal/site/public/dist/
-COPY ui-customization/devportal/index.jsp \
+COPY --from=ui-build /build/webapps/devportal/site/public/pages/index.jsp \
      /home/wso2carbon/wso2am-4.7.0/repository/deployment/server/webapps/devportal/site/public/pages/index.jsp
 
 # --- Publisher artifacts ---
