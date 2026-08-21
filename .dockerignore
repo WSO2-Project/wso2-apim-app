@@ -1,4 +1,7 @@
 .git
 .gitignore
-README.md
 *.md
+README*
+ui-customization/admin/source/node_modules/
+ui-customization/devportal/source/node_modules/
+ui-customization/admin/site/public/dist/*.map
