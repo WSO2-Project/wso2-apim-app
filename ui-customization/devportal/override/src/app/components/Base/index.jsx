@@ -761,7 +761,7 @@ class LayoutLegacy extends React.Component {
                                 </>
                             ) : (
                                 <Typography noWrap>
-                                    WSO2 {window.__ENV?.VERSION || 'unknown'} | Inetum Tunisie
+                                    WSO2 4.7.0+0.5.0-SNAPSHOT | Inetum Tunisie
                                 </Typography>
                             )}
                         </footer>
