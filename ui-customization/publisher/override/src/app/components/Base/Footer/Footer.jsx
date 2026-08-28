@@ -64,7 +64,7 @@ function Footer() {
                         <Typography noWrap>
                             <FormattedMessage
                                 id='Base.Footer.Footer.product_details'
-                                defaultMessage='WSO2 API-M v4.7.0_0.3.0 | © 2026 Inetum Tunisie'
+                                defaultMessage='WSO2 API-M 4.7.0+0.5.0 | © 2026 Inetum Tunisie'
                             />
                         </Typography>
                     )}

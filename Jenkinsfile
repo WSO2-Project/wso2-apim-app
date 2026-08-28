@@ -34,7 +34,9 @@ void runCheckedStep(String checkName, String title, Closure body) {
 }
 
 pipeline {
-    agent any
+    agent {
+        label 'slave_1'
+    }
 
     options {
         timestamps()
